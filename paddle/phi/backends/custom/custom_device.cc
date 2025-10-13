@@ -985,6 +985,60 @@ class CustomDevice : public DeviceInterface {
                            y));
   }
 
+  void TransformUnary(size_t dev_id,
+                      const stream::stream_t& stream,
+                      const void* input,
+                      void* output,
+                      size_t count,
+                      phi::DataType data_type,
+                      void* unary_op) override {
+    if (pimpl_->transform_unary) {
+      const auto device = &devices_pool[dev_id];
+      PADDLE_ENFORCE_CUSTOM_DEVICE_SUCCESS(
+          pimpl_->transform_unary(device,
+                                  reinterpret_cast<C_Stream>(stream),
+                                  input,
+                                  output,
+                                  count,
+                                  ToCDataType(data_type),
+                                  unary_op));
+    } else {
+      // Fallback to thrust implementation if custom transform is not available
+      PADDLE_THROW(common::errors::Unavailable(
+          "TransformUnary is not implemented on %s device. "
+          "Please implement transform_unary in the custom device plugin.",
+          Type()));
+    }
+  }
+
+  void TransformBinary(size_t dev_id,
+                       const stream::stream_t& stream,
+                       const void* input1,
+                       const void* input2,
+                       void* output,
+                       size_t count,
+                       phi::DataType data_type,
+                       void* binary_op) override {
+    if (pimpl_->transform_binary) {
+      const auto device = &devices_pool[dev_id];
+      PADDLE_ENFORCE_CUSTOM_DEVICE_SUCCESS(
+          pimpl_->transform_binary(device,
+                                   reinterpret_cast<C_Stream>(stream),
+                                   input1,
+                                   input2,
+                                   output,
+                                   count,
+                                   ToCDataType(data_type),
+                                   binary_op));
+    } else {
+      // Fallback to thrust implementation if custom transform is not available
+      PADDLE_THROW(common::errors::Unavailable(
+          "TransformBinary is not implemented on %s device. "
+          "Please implement transform_binary in the custom device plugin.",
+          Type()));
+    }
+  }
+
   // Profiler
   void ProfilerInitialize(phi::TraceEventCollector* collector,
                           void** user_data) override {

@@ -19,6 +19,7 @@ limitations under the License. */
 
 #include "paddle/common/hostdevice.h"
 #include "paddle/phi/backends/all_context.h"
+#include "paddle/phi/backends/device_manager.h"
 #include "paddle/phi/core/enforce.h"
 
 #if defined(__NVCC__) || defined(__HIPCC__)
@@ -92,7 +93,100 @@ struct Transform<phi::CPUContext> {
   }
 };
 
-#if defined(__NVCC__) || defined(__HIPCC__)
+#if defined(PADDLE_WITH_CUSTOM_DEVICE)
+template <>
+struct Transform<phi::CustomContext> {
+  template <typename InputIter, typename OutputIter, typename UnaryOperation>
+  void operator()(const phi::CustomContext& context,
+                  InputIter first,
+                  InputIter last,
+                  OutputIter result,
+                  UnaryOperation op) {
+    auto place = context.GetPlace();
+    PADDLE_ENFORCE_EQ(place.GetType() == phi::AllocationType::CUSTOM,
+                      true,
+                      common::errors::PreconditionNotMet(
+                          "The Transform must be used in CUSTOM place."));
+
+    // Extract raw pointers and count from iterators
+    const void* input_ptr = ExtractRawPointer(first);
+    void* output_ptr = ExtractRawPointer(result);
+    size_t count = std::distance(first, last);
+
+    // Get data type from iterator value type
+    using InputType = typename std::iterator_traits<InputIter>::value_type;
+    phi::DataType data_type = phi::CppTypeToDataType<InputType>::Type();
+
+    // Call DeviceManager's encapsulated function directly
+    phi::DeviceManager::TransformUnary(place,
+                                       context.stream(),
+                                       input_ptr,
+                                       output_ptr,
+                                       count,
+                                       data_type,
+                                       static_cast<void*>(&op));
+  }
+
+  template <typename InputIter1,
+            typename InputIter2,
+            typename OutputIter,
+            typename BinaryOperation>
+  void operator()(const phi::CustomContext& context,
+                  InputIter1 first1,
+                  InputIter1 last1,
+                  InputIter2 first2,
+                  OutputIter result,
+                  BinaryOperation op) {
+    auto place = context.GetPlace();
+    PADDLE_ENFORCE_EQ(place.GetType() == phi::AllocationType::CUSTOM,
+                      true,
+                      common::errors::PreconditionNotMet(
+                          "The Transform must be used in CUSTOM place."));
+
+    // Extract raw pointers and count from iterators
+    const void* input1_ptr = ExtractRawPointer(first1);
+    const void* input2_ptr = ExtractRawPointer(first2);
+    void* output_ptr = ExtractRawPointer(result);
+    size_t count = std::distance(first1, last1);
+
+    // Get data type from iterator value type
+    using InputType1 = typename std::iterator_traits<InputIter1>::value_type;
+    phi::DataType data_type = phi::CppTypeToDataType<InputType1>::Type();
+
+    // Call DeviceManager's encapsulated function directly
+    phi::DeviceManager::TransformBinary(place,
+                                        context.stream(),
+                                        input1_ptr,
+                                        input2_ptr,
+                                        output_ptr,
+                                        count,
+                                        data_type,
+                                        static_cast<void*>(&op));
+  }
+
+ private:
+  // Helper function to extract raw pointer from iterator
+  template <typename Iter>
+  static const void* ExtractRawPointer(Iter iter) {
+    if constexpr (std::is_pointer_v<Iter>) {
+      return static_cast<const void*>(iter);
+    } else {
+      // For non-pointer iterators, try to get the underlying pointer
+      return static_cast<const void*>(&(*iter));
+    }
+  }
+
+  template <typename Iter>
+  static void* ExtractRawPointer(Iter iter) {
+    if constexpr (std::is_pointer_v<Iter>) {
+      return static_cast<void*>(iter);
+    } else {
+      // For non-pointer iterators, try to get the underlying pointer
+      return static_cast<void*>(&(*iter));
+    }
+  }
+};
+#elif defined(__NVCC__) || defined(__HIPCC__)
 
 // PointerToThrustDevicePtr has two specializations, one casts a (CUDA
 // device) pointer into thrust::device_ptr, the other keeps rest types

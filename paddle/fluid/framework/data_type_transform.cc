@@ -102,6 +102,17 @@ struct CastDataType {
             in_end,
             out_begin,
             CastDataTypeFunctor<InType, OutType>());
+#if defined(PADDLE_WITH_CUSTOM_DEVICE)
+    } else if (phi::is_custom_place(in_.place())) {
+      phi::Transform<phi::CPUContext> trans;
+      auto* context = static_cast<const phi::CPUContext*>(ctx_);
+      trans(*context,
+            in_begin,
+            in_end,
+            out_begin,
+            CastDataTypeFunctor<InType, OutType>());
+      context->Wait();
+#endif
 #if defined(__NVCC__) || defined(__HIPCC__)
     } else if (phi::is_gpu_place(in_.place())) {
       phi::Transform<phi::GPUContext> trans;

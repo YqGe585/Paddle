@@ -873,4 +873,33 @@ std::vector<std::string> ListAllLibraries(const std::string& library_dir) {
   return libraries;
 }
 
+void DeviceManager::TransformUnary(const Place& place,
+                                   const stream::stream_t& stream,
+                                   const void* input,
+                                   void* output,
+                                   size_t count,
+                                   phi::DataType data_type,
+                                   void* unary_op) {
+  auto device_type = place.GetDeviceType();
+  auto device_id = place.GetDeviceId();
+  auto dev_impl = GetDeviceInterfaceWithType(device_type);
+  dev_impl->TransformUnary(
+      device_id, stream, input, output, count, data_type, unary_op);
+}
+
+void DeviceManager::TransformBinary(const Place& place,
+                                    const stream::stream_t& stream,
+                                    const void* input1,
+                                    const void* input2,
+                                    void* output,
+                                    size_t count,
+                                    phi::DataType data_type,
+                                    void* binary_op) {
+  auto device_type = place.GetDeviceType();
+  auto device_id = place.GetDeviceId();
+  auto dev_impl = GetDeviceInterfaceWithType(device_type);
+  dev_impl->TransformBinary(
+      device_id, stream, input1, input2, output, count, data_type, binary_op);
+}
+
 }  // namespace phi

@@ -800,7 +800,49 @@ struct C_DeviceInterface {
                          void* x,
                          float beta,
                          void* y);
-  void* reserved_other_api[7];
+
+  /**
+   * @brief Unary transform: applies a unary operation to each element in the
+   * range
+   *
+   * @param[C_Device] device     Device handle
+   * @param[C_Stream] stream     Stream handle
+   * @param[void*] input         Input data pointer
+   * @param[void*] output        Output data pointer
+   * @param[size_t] count        Number of elements
+   * @param[C_DataType] data_type Data type of elements
+   * @param[void*] unary_op      Unary operation function pointer
+   */
+  C_Status (*transform_unary)(const C_Device device,
+                              C_Stream stream,
+                              const void* input,
+                              void* output,
+                              size_t count,
+                              C_DataType data_type,
+                              void* unary_op);
+
+  /**
+   * @brief Binary transform: applies a binary operation to each element in the
+   * range
+   *
+   * @param[C_Device] device     Device handle
+   * @param[C_Stream] stream     Stream handle
+   * @param[void*] input1        First input data pointer
+   * @param[void*] input2        Second input data pointer
+   * @param[void*] output        Output data pointer
+   * @param[size_t] count        Number of elements
+   * @param[C_DataType] data_type Data type of elements
+   * @param[void*] binary_op     Binary operation function pointer
+   */
+  C_Status (*transform_binary)(const C_Device device,
+                               C_Stream stream,
+                               const void* input1,
+                               const void* input2,
+                               void* output,
+                               size_t count,
+                               C_DataType data_type,
+                               void* binary_op);
+  void* reserved_other_api[5];
 };
 
 struct CustomRuntimeVersion {

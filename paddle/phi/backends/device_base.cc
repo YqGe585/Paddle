@@ -485,6 +485,27 @@ void DeviceInterface::DestroyBlasLtHandle(size_t dev_id, void* blaslt_handle) {
   INTERFACE_UNIMPLEMENT;
 }
 
+void DeviceInterface::TransformUnary(size_t dev_id,
+                                     const stream::stream_t& stream,
+                                     const void* input,
+                                     void* output,
+                                     size_t count,
+                                     phi::DataType data_type,
+                                     void* unary_op) {
+  INTERFACE_UNIMPLEMENT;
+}
+
+void DeviceInterface::TransformBinary(size_t dev_id,
+                                      const stream::stream_t& stream,
+                                      const void* input1,
+                                      const void* input2,
+                                      void* output,
+                                      size_t count,
+                                      phi::DataType data_type,
+                                      void* binary_op) {
+  INTERFACE_UNIMPLEMENT;
+}
+
 #undef INTERFACE_UNIMPLEMENT
 
 }  // namespace phi

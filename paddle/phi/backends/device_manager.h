@@ -322,6 +322,23 @@ class PADDLE_API DeviceManager {
 
   static void DestroyBlasLtHandle(const Place& place, void* blaslt_handle);
 
+  static void TransformUnary(const Place& place,
+                             const stream::stream_t& stream,
+                             const void* input,
+                             void* output,
+                             size_t count,
+                             phi::DataType data_type,
+                             void* unary_op);
+
+  static void TransformBinary(const Place& place,
+                              const stream::stream_t& stream,
+                              const void* input1,
+                              const void* input2,
+                              void* output,
+                              size_t count,
+                              phi::DataType data_type,
+                              void* binary_op);
+
  private:
   DISABLE_COPY_AND_ASSIGN(DeviceManager);
   DeviceManager() {}
