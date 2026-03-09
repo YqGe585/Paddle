@@ -41,7 +41,29 @@ void LstsqKernel(const Context& dev_ctx,
                  DenseTensor* singular_values) {
   using ValueType = phi::dtype::Real<T>;
   if (x.numel() == 0 || y.numel() == 0) {
-    if (solution) Full<T, Context>(dev_ctx, solution->dims(), 0, solution);
+    // When input has zero dimension, compute correct solution shape from inputs
+    // solution shape should be [n, nrhs] where n is x's last dim, nrhs is y's last dim
+    auto x_dims = x.dims();
+    auto y_dims = y.dims();
+    int dim_size = x_dims.size();
+    int n = static_cast<int>(x_dims[dim_size - 1]);
+    int nrhs = static_cast<int>(y_dims[dim_size - 1]);
+    int batch_count = phi::GetBatchCount(x_dims);
+
+    DDim solution_dims;
+    if (batch_count > 1) {
+      std::vector<int64_t> solution_vec;
+      for (int i = 0; i < dim_size - 2; ++i) {
+        solution_vec.push_back(x_dims[i]);
+      }
+      solution_vec.push_back(n);
+      solution_vec.push_back(nrhs);
+      solution_dims = make_ddim(solution_vec);
+    } else {
+      solution_dims = make_ddim({n, nrhs});
+    }
+
+    if (solution) Full<T, Context>(dev_ctx, solution_dims, 0, solution);
     if (rank) Full<int64_t, Context>(dev_ctx, rank->dims(), 0, rank);
     if (residuals)
       GetResidualsTensor<Context, T>(
