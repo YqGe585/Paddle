@@ -144,13 +144,28 @@ void exec_fft(const XPUContext& dev_ctx,
   dev_ctx.Alloc<To>(&collapsed_output);
 
   int64_t device_id = dev_ctx.GetPlace().GetDeviceId();
-  FFTConfigCache& plan_cache = get_fft_plan_cache(device_id);
-  std::lock_guard<std::mutex> guard(plan_cache.mutex);
   FFTConfigKey key =
       create_fft_configkey(collapsed_input, collapsed_output, signal_ndim);
+
+  // Validate sizes before any XPU resource allocation (plan cache lookup
+  // creates a CuFFTHandle internally) to ensure clean error handling for
+  // sizes the XPU FFT library cannot handle.
+  std::vector<int64_t> config_sizes(
+      key.sizes_, key.sizes_ + key.signal_ndim_ + 1);
+  FFTConfig::ValidateSizes(config_sizes, key.fft_type_);
+
+  FFTConfigCache& plan_cache = get_fft_plan_cache(device_id);
+  std::lock_guard<std::mutex> guard(plan_cache.mutex);
   FFTConfig* config = &(plan_cache.lookup(key));
 
-  const int64_t workspace_size = static_cast<int64_t>(config->workspace_size());
+  // XPU FFT library may underestimate workspace size for certain signal
+  // dimensions (e.g. prime factors), causing heap buffer overflow and
+  // crashes (munmap_chunk) or data corruption. Add a generous safety
+  // margin: 2x the reported size, minimum 1 MiB.
+  const int64_t reported_ws_size =
+      static_cast<int64_t>(config->workspace_size());
+  const int64_t workspace_size =
+      std::max(reported_ws_size * 2, static_cast<int64_t>(1024 * 1024));
   DenseTensor workspace_tensor = Empty<uint8_t>(dev_ctx, {workspace_size});
 
   // prepare cufft for execution
@@ -213,8 +228,11 @@ struct FFTC2CFunctor<XPUContext, Ti, To> {
 
     DenseTensor working_tensor = x;  // shallow copy
     while (true) {
-      max_dims = std::min(static_cast<size_t>(detail::kMaxFFTNdim),
-                          working_axes.size());
+      // XPU FFT library has issues with 3D C2C plans (produces wrong
+      // backward gradients for certain signal sizes). Limit to 2D at a time
+      // to ensure correct decomposition matching the forward path.
+      constexpr size_t kXPUMaxFFTNdim = 2;
+      max_dims = std::min(kXPUMaxFFTNdim, working_axes.size());
       first_dims.assign(working_axes.end() - max_dims, working_axes.end());
 
       detail::exec_fft<Ti, To>(

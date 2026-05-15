@@ -64,6 +64,29 @@ inline cufftType type_input(FFTTransformType type) {
 class FFTConfig {
  public:
   using plan_size_type = int;  // NOLINT (be consistent with cufft)
+
+  // Validate FFT axis sizes before creating any XPU resources (plan, handle).
+  // C2C transforms on XPU crash for small signal sizes (<=4) in the vendor
+  // library (cufftExecC2C path). R2C/C2R transforms work correctly for
+  // sizes >= 2. Workspace buffer overflow crashes that affected all transform
+  // types are now prevented by workspace safety margins in fft_xpu.cc.
+  static void ValidateSizes(const std::vector<int64_t>& sizes,
+                            FFTTransformType fft_type) {
+    const int signal_ndim = static_cast<int>(sizes.size()) - 1;
+    int min_size = (fft_type == FFTTransformType::C2C) ? 4 : 1;
+    for (int i = 0; i < signal_ndim; ++i) {
+      if (sizes[i + 1] <= min_size) {  // sizes[0] is batch size
+        PADDLE_THROW(common::errors::InvalidArgument(
+            "XPU %s FFT requires all axes to have greater than %d elements, "
+            "but axis %d has size %d.",
+            (fft_type == FFTTransformType::C2C) ? "C2C" : "R2C/C2R",
+            min_size,
+            i,
+            sizes[i + 1]));
+      }
+    }
+  }
+
   explicit FFTConfig(const FFTConfigKey& key)
       : FFTConfig(
             std::vector<int64_t>(key.sizes_, key.sizes_ + key.signal_ndim_ + 1),
@@ -77,19 +100,6 @@ class FFTConfig {
     const auto batch_size = static_cast<plan_size_type>(sizes[0]);
     std::vector<plan_size_type> signal_sizes(sizes.cbegin() + 1, sizes.cend());
     const int signal_ndim = sizes.size() - 1;
-
-    // Check if the number of elements participating in FFT transformation is
-    // greater than 8 (XPU hardware requirement)
-    for (int i = 0; i < signal_ndim; ++i) {
-      if (signal_sizes[i] <= 8) {
-        PADDLE_THROW(common::errors::InvalidArgument(
-            "XPU FFT requires all axes to have greater than 8 elements, "
-            "but axis %d has size %d.Set XFFT_DEBUG=1 environment variable "
-            "to inspect dimensions.",
-            i,
-            signal_sizes[i]));
-      }
-    }
 
     cufftType exec_type;
     exec_type = type_input(fft_type);
