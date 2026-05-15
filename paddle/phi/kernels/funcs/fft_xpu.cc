@@ -173,6 +173,12 @@ void exec_fft(const XPUContext& dev_ctx,
         *config, collapsed_input.data(), collapsed_output.data(), forward);
   }
 
+  // Synchronize XPU stream to ensure FFT execution completes and workspace
+  // memory is no longer in use before it is deallocated when exec_fft returns.
+  // Without this, asynchronous FFT operations may access freed workspace memory
+  // causing use-after-free crashes (munmap_chunk invalid pointer).
+  dev_ctx.Wait();
+
   // resize for the collapsed output
   collapsed_output.Resize(transposed_output_shape);
   DenseTensor& transposed_output = collapsed_output;
